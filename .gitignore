@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env/
+
+# VSCode settings
+.vscode/
+
+# MacOS system files
+.DS_Store
+
+# Python package files
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# Streamlit secrets (if exists)
+.streamlit/secrets.toml

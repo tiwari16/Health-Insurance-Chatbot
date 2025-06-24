@@ -1,35 +1,66 @@
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain.schema import Document
+from langchain.text_splitter import CharacterTextSplitter
 import os
+import pdfplumber
+
+def extract_text_from_pdfs(data_path="data"):
+    """Extracts text from PDFs, prints debug info, chunks it, and returns Document objects."""
+    documents = []
+    splitter = CharacterTextSplitter(chunk_size=100, chunk_overlap=50)
+
+    for root, _, files in os.walk(data_path):
+        for file in files:
+            if file.lower().endswith(".pdf"):
+                file_path = os.path.join(root, file)
+                try:
+                    with pdfplumber.open(file_path) as pdf:
+                        text = ""
+                        for page in pdf.pages:
+                            page_text = page.extract_text()
+                            if page_text:
+                                text += page_text + "\n"
+
+                    text = text.strip()
+
+                    print(f"\n📄 File: {file_path}")
+                    print(f"🔢 Extracted {len(text)} characters")
+
+                    if text:
+                        print(f"📝 Extracted Text Preview:\n{text[:500]}...\n")
+                        chunks = splitter.split_text(text)
+                        for chunk in chunks:
+                            documents.append(Document(page_content=chunk, metadata={"source": file_path}))
+
+                        print(f"✅ Loaded {len(chunks)} chunks from: {file_path}\n")
+                    else:
+                        print(f"⚠️ No extractable text in: {file_path}\n")
+
+                except Exception as e:
+                    print(f"⚠️ Skipping {file_path} due to error: {e}\n")
+
+    return documents
+
+def create_text_based_vectorstore(embeddings, data_path="data"):
+    """Creates FAISS vectorstore from chunked PDF text."""
+    docs = extract_text_from_pdfs(data_path)
+
+    if not docs:
+        print("⚠️ No valid documents found. Vectorstore not created.")
+        return None
+
+    db = FAISS.from_documents(docs, embeddings)
+    db.save_local("faiss_index")
+    return db
 
 def load_vectorstore():
-    """Loads an existing FAISS vector store if available."""
+    """Loads FAISS index or creates one from PDF text if not present."""
     embeddings = OpenAIEmbeddings()
-    
-    # Check if FAISS index exists
+
     if os.path.exists("faiss_index/index.faiss"):
         db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
     else:
-        db = create_demo_vectorstore(embeddings)
-    return db
-
-
-def create_demo_vectorstore(embeddings):
-    """Creates a vector store with mock documents for demonstration."""
-    
-    docs = [
-        Document(page_content="Extras cover includes dental, optical, and physio."),
-        Document(page_content="Gold hospital cover includes private room and ambulance cover."),
-        Document(page_content="Claims can be submitted online or through the mobile app."),
-        Document(page_content="Update your bank details in Account Settings."),
-        Document(page_content="Direct debit setup is available under billing preferences."),
-        Document(page_content="Lapsed policies can be reactivated within 60 days online."),
-    ]
-
-    db = FAISS.from_documents(docs, embeddings)
-    
-    # Optional: Save the FAISS index
-    db.save_local("faiss_index")
+        db = create_text_based_vectorstore(embeddings)
     
     return db
